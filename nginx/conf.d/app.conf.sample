@@ -1,0 +1,6 @@
+server {
+    listen 80;
+    set $MAGE_ROOT /var/www/app;
+    set $MAGE_RUN_TYPE website;
+    include /var/www/app/nginx.conf.sample;
+}

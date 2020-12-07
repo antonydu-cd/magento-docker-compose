@@ -1,0 +1,240 @@
+#!/bin/bash
+
+if [ "$(whoami)" != "ec2-user" ]; then
+    echo -e "\e[1;31mPlease run as ec2-user\e[00m"
+    exit 1
+fi
+
+function saveSettings {
+    echo "step=$step" > ~/install-settings.ini
+    echo "project_name=$project_name" >> ~/install-settings.ini
+    echo "magento_ce=$magento_ce" >> ~/install-settings.ini
+    echo "magento_version=$magento_version" >> ~/install-settings.ini
+    echo "magento_domain=$magento_domain" >> ~/install-settings.ini
+}
+
+if [ -a ~/install-settings.ini ]; then
+    step=$(awk -F "=" '/step/ {print $2}' ~/install-settings.ini)
+    project_name=$(awk -F "=" '/project_name/ {print $2}' ~/install-settings.ini)
+    magento_ce=$(awk -F "=" '/magento_ce/ {print $2}' ~/install-settings.ini)
+    magento_version=$(awk -F "=" '/magento_version/ {print $2}' ~/install-settings.ini)
+    magento_domain=$(awk -F "=" '/magento_domain/ {print $2}' ~/install-settings.ini)
+
+    echo
+    echo -e "\e[1;36mThese settings were found from a previous install"
+    echo -e "\e[1;34mProject Name: \e[1;36m$project_name"
+    echo -e "\e[1;34mAre you use magento community edition: \e[1;36m$magento_ce"
+    echo -e "\e[1;34mProject Version: \e[1;36m$magento_version"
+    echo -e "\e[1;34mProject Domain: \e[1;36m$magento_domain"
+    echo
+
+    while :
+    do
+        read -p "[C]ontinue with these settings from last known step or e[X]it script : " continue
+        echo -e "\e[00m"
+
+        case $continue in
+            C|c)
+                break
+                ;;
+            X|x)
+                echo -e "\e[1;31mTo restart the install process from the beginning please delete the saved settings file ~/install-settings.ini\e[00m"
+                exit 4
+                break
+                ;;
+            *)
+                echo -e "\e[1;31mInvalid Option entered\e[00m"
+        esac
+    done
+    echo
+    echo
+fi
+
+if [ ! -n "$step" ]; then
+    echo -e "\e[1;36m"
+    read -p "Enter Magento Project Name: " project_name
+    read -p "Are you use Magento Community Version(y/n)?: " magento_ce
+    read -p "Enter Magento Version(eg: 2.4.0): " magento_version
+    read -p "Enter Project Domain(eg: test.ebrook.work / 47.75.197.168): " magento_domain
+    read -p "Enter Magento Username: " magento_username
+    read -p "Enter Magento Password: " magento_password
+    step=1
+    saveSettings
+fi
+
+echo -e "\e[00m"
+
+#############
+##  STEP 1 ##
+#############
+if [ $step == 1 ];then
+    echo -e "\e[1;32mStep 1: Configure nginx server\e[00m"
+    if [ ! -d nginx/conf.d/  ];then
+        mkdir -p nginx/conf.d/
+        
+    fi
+    cat > nginx/conf.d/$project_name.conf << EOF
+    server {
+        listen 80;
+        set \$MAGE_ROOT /var/www/${project_name};
+        set \$MAGE_RUN_TYPE website;
+        include /var/www/${project_name}/nginx.conf.sample;
+    }
+EOF
+    ((step++))
+    saveSettings
+fi
+
+#############
+##  STEP 2 ##
+#############
+if [ $step == 2 ];then
+    echo -e "\e[1;32mStep 2: Configure composer auth, Install PHP, Composer, Docker\e[00m"
+    if ! type docker >/dev/null 2>&1;then
+        if [ ! -d /home/ec2-user/.config/composer/  ];then
+            mkdir -p /home/ec2-user/.config/composer/
+            
+        fi
+        cat > /home/ec2-user/.config/composer/auth.json << EOF
+        {
+            "http-basic": {
+                "repo.magento.com": {
+                    "username": "${magento_username}",
+                    "password": "${magento_password}"
+                }
+            }
+        }
+EOF
+        echo -e "\e[1;32mInstall PHP:\e[00m"
+        sudo amazon-linux-extras enable php7.4
+        sudo yum install -y php-cli php-pdo php-fpm php-json php-mysqlnd
+        sudo yum install -y php-opcache php-xml php-gd php-devel php-intl php-mbstring php-bcmath php-iconv php-soap
+        sudo sed -i 's/memory_limit = 128M/memory_limit = -1/g' /etc/php.ini
+        echo -e "\e[1;32mInstall PHP End;\e[00m"
+        echo -e "\e[1;32mInstall Composer:\e[00m"
+        curl -sS https://getcomposer.org/installer | php
+        php composer.phar selfupdate --1
+        sudo mv composer.phar /usr/bin/composer
+        echo -e "\e[1;32mInstall Composer End;\e[00m"
+        echo "Install Docker:"
+        echo -e "\e[1;32mInstall Docker:\e[00m"
+        sudo yum install -y docker
+        sudo systemctl enable docker
+        sudo systemctl start docker
+        echo -e "\e[1;32mInstall Docker End;\e[00m"
+        echo -e "\e[1;32mInstall Gem:\e[00m"
+        sudo yum install -y gem
+        echo -e "\e[1;32mInstall Gem End;\e[00m"
+        echo -e "\e[1;32mInstall Docker Sync:\e[00m"
+        sudo gem install docker-sync
+        echo -e "\e[1;32mInstall Docker Sync End;\e[00m"
+        echo -e "\e[1;32mInstall Python:\e[00m"
+        sudo amazon-linux-extras enable python3.8
+        sudo yum install -y python3.8
+        echo -e "\e[1;32mInstall Python End;\e[00m"
+        echo -e "\e[1;32mInstall Pip:\e[00m"
+        sudo yum install -y python3-pip
+        echo -e "\e[1;32mInstall Pip End;\e[00m"
+        echo -e "\e[1;32mInstall Docker-compose:\e[00m"
+        sudo pip3 install docker-compose
+        # effect after relogin
+        sudo usermod -a -G docker ec2-user
+        echo -e "\e[1;32mInstall Docker-compose End;\e[00m"
+    fi
+
+    ((step++))
+    saveSettings
+fi
+
+#############
+##  STEP 3 ##
+#############
+if [ $step == 3 ];then
+    echo -e "\e[1;32mStep 3: Composer Get Magento\e[00m"
+    if [ ! -d /var/www/$project_name  ];then
+        sudo mkdir -p /var/www/$project_name
+        sudo chown -R ec2-user:ec2-user /var/www/$project_name
+    fi
+    case $magento_ce in
+        Y|y)
+            composer create-project --repository-url=https://repo.magento.com/ magento/project-community-edition:$magento_version /var/www/$project_name
+            break
+            ;;
+        N|n)
+            composer create-project --repository-url=https://repo.magento.com/ magento/project-enterprise-edition:$magento_version /var/www/$project_name
+            break
+            ;;
+        *)
+            echo -e "\e[1;31mInvalid Value entered\e[00m"
+    esac
+    ((step++))
+    saveSettings
+fi
+
+#############
+##  STEP 4 ##
+#############
+if [ $step == 4 ];then
+    phpPros=`sudo docker ps | grep php | wc -l`
+    if [ $phpPros == 0 ];then
+        echo -e "\e[1;32mStep 4: Start up docker-compose\e[00m"
+        sudo /usr/local/bin/docker-compose up -d
+    else
+        sudo /usr/local/bin/docker-compose restart
+    fi
+    ((step++))
+    saveSettings
+    sleep 60
+fi
+
+#############
+##  STEP 5 ##
+#############
+if [ $step == 5 ];then
+    echo -e "\e[1;32mStep 5: Create Db and User\e[00m"
+    sudo docker exec -it mysql mysql -u root -p12345abc -e "create database magento_$project_name"
+    sudo docker exec -it mysql mysql -u root -p12345abc -e "create user 'magento_$project_name'@'%' IDENTIFIED BY 'magento_$project_name'"
+    sudo docker exec -it mysql mysql -u root -p12345abc -e "grant all privileges on magento_$project_name.* to 'magento_$project_name'@'%';flush privileges;"
+    sudo docker exec -it mysql mysql -u root -p12345abc -e "ALTER USER 'magento_$project_name'@'%' IDENTIFIED WITH mysql_native_password BY 'magento_$project_name';"
+    ((step++))
+    saveSettings
+fi
+
+#############
+##  STEP 6 ##
+#############
+if [ $step == 6 ];then
+    echo -e "\e[1;32mStep 6: Install Magento\e[00m"
+    sudo docker exec -it php /var/www/$project_name/bin/magento setup:install \
+        --base-url=http://$magento_domain/ \
+        --backend-frontname "SiteAdmin" \
+        --db-host=mysql \
+        --db-name=magento_$project_name \
+        --db-user=magento_$project_name \
+        --db-password=magento_$project_name \
+        --search-engine=elasticsearch7 \
+        --elasticsearch-host=elasticsearch \
+        --elasticsearch-port=9200 \
+        --cache-backend=redis \
+        --cache-backend-redis-server=redis \
+        --cache-backend-redis-db=0 \
+        --page-cache=redis \
+        --page-cache-redis-server=redis \
+        --page-cache-redis-db=1 \
+        --session-save=redis \
+        --session-save-redis-host=redis \
+        --session-save-redis-log-level=4 \
+        --session-save-redis-db=2 \
+        --admin-firstname=antony \
+        --admin-lastname=du \
+        --admin-email=antony@ebrook.com.tw \
+        --admin-user=antony.du \
+        --admin-password=12345abc \
+        --language=en_US \
+        --currency=USD \
+        --timezone=America/Chicago \
+        --use-rewrites=1
+    ((step++))
+    saveSettings
+    rm ~/install-settings.ini
+fi
