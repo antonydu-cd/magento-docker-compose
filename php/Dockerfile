@@ -1,7 +1,7 @@
-FROM php:7.3-fpm-buster
+FROM php:7.4-fpm-buster
 
-LABEL Maintainer="Paulo Real <contact@pauloreal.com>" \
-      Description="Laravel (and Lumen) ready image php:7.4-fpm-buster based"
+LABEL Maintainer="antony@ebrook.com.tw" \
+      Description="Magento ready image php:7.4-fpm-buster based"
 
 
 ARG DEBIAN_FRONTEND=noninteractive
