@@ -10,11 +10,11 @@ ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
   && apt-get upgrade -y \
   && apt-get install -y --no-install-recommends \
-  cron \
   apt-utils \
   sendmail-bin \
   sendmail \
   sudo \
+  iproute2 \
   libbz2-dev \
   libjpeg62-turbo-dev \
   libpng-dev \
@@ -22,15 +22,12 @@ RUN apt-get update \
   libgeoip-dev \
   wget \
   libgmp-dev \
+  libgpgme11-dev \
   libmagickwand-dev \
   libmagickcore-dev \
-  libc-client-dev \
-  libkrb5-dev \
   libicu-dev \
   libldap2-dev \
   libpspell-dev \
-  librecode0 \
-  librecode-dev \
   libtidy-dev \
   libxslt1-dev \
   libyaml-dev \
@@ -43,32 +40,28 @@ RUN apt-get update -y && apt-get upgrade -y && apt-get autoremove -y
 
 # Configure the gd library
 RUN docker-php-ext-configure \
-  gd --with-freetype-dir=/usr/include/ --with-jpeg-dir=/usr/include/
-RUN docker-php-ext-configure \
-  imap --with-kerberos --with-imap-ssl
+  gd --with-freetype=/usr/include/ --with-jpeg=/usr/include/
 RUN docker-php-ext-configure \
   ldap --with-libdir=lib/x86_64-linux-gnu
 RUN docker-php-ext-configure \
   opcache --enable-opcache
-RUN docker-php-ext-configure \
-  zip --with-libzip
 
 # Install extensions
-RUN docker-php-ext-install bcmath \
+# Install required PHP extensions
+RUN docker-php-ext-install -j$(nproc) \
+  bcmath \
   bz2 \
   calendar \
   exif \
   gd \
   gettext \
   gmp \
-  imap \
   intl \
   ldap \
   mysqli \
   opcache \
   pdo_mysql \
   pspell \
-  recode \
   shmop \
   soap \
   sockets \
@@ -79,7 +72,7 @@ RUN docker-php-ext-install bcmath \
   xmlrpc \
   xsl \
   zip \
-  pcntl 
+  pcntl
 
 # Install phpredis extension
 RUN pecl install -o -f redis && docker-php-ext-enable redis
