@@ -1,0 +1,10 @@
+[mysqld]
+
+skip-host-cache
+skip-name-resolve
+
+server-id=1
+sync_binlog=1
+log-bin=mysql-bin-1
+binlog_format=ROW
+binlog_do_db=magento

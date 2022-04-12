@@ -14,7 +14,8 @@ services:
       - "443:443"
     depends_on:
       - php
-      - mysql
+      - mysql_master
+      - mysql_slave
       - redis
       - elasticsearch
     networks:
@@ -40,21 +41,42 @@ services:
         ipv4_address: 172.19.0.2
         aliases:
           - php
-  mysql:
+  mysql_master:
     image: mysql:8.0
     restart: always
-    container_name: mysql
+    container_name: mysql_master
     volumes:
-      - "./mysql/data:/var/lib/mysql"
+      - "./mysql/conf.d/master.cnf:/etc/mysql/conf.d/mysql.conf.cnf"
+      - "./mysql/data/master:/var/lib/mysql"
     expose:
       - 3306
     environment:
       MYSQL_ROOT_PASSWORD: "12345abc"
+      MYSQL_DATABASE: "magento"
     networks:
       docker_composer_net:
         ipv4_address: 172.19.0.3
         aliases:
-          - mysql
+          - mysql_master
+  mysql_slave:
+    image: mysql:8.0
+    restart: always
+    container_name: mysql_slave
+    volumes:
+      - "./mysql/conf.d/slave.cnf:/etc/mysql/conf.d/mysql.conf.cnf"
+      - "./mysql/data/slave:/var/lib/mysql"
+    expose:
+      - 3306
+    environment:
+      MYSQL_ROOT_PASSWORD: "12345abc"
+      MYSQL_USER: "admin"
+      MYSQL_PASSWORD: "12345abc"
+      MYSQL_DATABASE: "magento"
+    networks:
+      docker_composer_net:
+        ipv4_address: 172.19.0.7
+        aliases:
+          - mysql_slave
   redis:
     image: redis
     restart: always
