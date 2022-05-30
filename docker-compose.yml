@@ -16,17 +16,14 @@ services:
       - php
       - mysql
       - redis
-      - elasticsearch
+      - es7
     networks:
       docker_composer_net:
         ipv4_address: 172.19.0.6
         aliases:
           - nginx
   php:
-    build:
-      context: ./php
-      dockerfile: Dockerfile
-    image: php:7.4-fpm
+    image: antonydu/php:7.4-fpm
     restart: always
     expose:
       - 9000
@@ -59,20 +56,20 @@ services:
     image: redis
     restart: always
     container_name: redis
-    expose:
-      - 6379
+    ports:
+      - "6379:6379"
     networks:
       docker_composer_net:
         ipv4_address: 172.19.0.4
         aliases:
           - redis
-  elasticsearch:
+  es7:
     build:
       context: ./elasticsearch
       dockerfile: Dockerfile
     image: elasticsearch:7.6.2
     restart: always
-    container_name: elasticsearch
+    container_name: es7
     expose:
       - 9200
       - 9300
@@ -80,7 +77,76 @@ services:
       docker_composer_net:
         ipv4_address: 172.19.0.5
         aliases:
+          - es7
+  es1:
+    build: /var/www/vue-storefront-api/docker/elasticsearch/
+    image: es1
+    container_name: elasticsearch
+    restart: always
+    ports:
+      - '9200:9200'
+      - '9300:9300'
+    volumes:
+      - /var/www/vue-storefront-api/docker/elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
+    networks:
+      docker_composer_net:
+        ipv4_address: 172.19.0.7
+        aliases:
           - elasticsearch
+    environment:
+      - discovery.type=single-node
+      - cluster.name=docker-cluster
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xmx512m -Xms512m"
+  kibana:
+    build: /var/www/vue-storefront-api/docker/kibana/
+    image: kibana
+    container_name: kibana
+    restart: always
+    ports:
+      - '5601:5601'
+    volumes:
+      - /var/www/vue-storefront-api/docker/kibana/config/:/usr/share/kibana/config:ro
+    depends_on:
+      - es1
+    networks:
+      docker_composer_net:
+        ipv4_address: 172.19.0.8
+        aliases:
+          - kibana
+  vsf_api:
+    image: vsf_api
+    build:
+      context: /var/www/vue-storefront-api/
+      dockerfile: /var/www/vue-storefront-api/docker/vue-storefront-api/Dockerfile
+    restart: always
+    container_name: vsf_api
+    depends_on:
+      - es1
+      - redis
+    env_file: /var/www/vue-storefront-api/docker/vue-storefront-api/default.env
+    environment:
+      VS_ENV: dev
+    volumes:
+      - '/var/www/vue-storefront-api/config:/var/www/config'
+      - '/var/www/vue-storefront-api/ecosystem.json:/var/www/ecosystem.json'
+      - '/var/www/vue-storefront-api/migrations:/var/www/migrations'
+      - '/var/www/vue-storefront-api/package.json:/var/www/package.json'
+      - '/var/www/vue-storefront-api/babel.config.js:/var/www/babel.config.js'
+      - '/var/www/vue-storefront-api/tsconfig.json:/var/www/tsconfig.json'
+      - '/var/www/vue-storefront-api/nodemon.json:/var/www/nodemon.json'
+      - '/var/www/vue-storefront-api/scripts:/var/www/scripts'
+      - '/var/www/vue-storefront-api/src:/var/www/src'
+      - '/var/www/vue-storefront-api/var:/var/www/var'
+    tmpfs:
+      - /var/www/dist
+    ports:
+      - '8080:8080'
+    networks:
+      docker_composer_net:
+        ipv4_address: 172.19.0.9
+        aliases:
+          - vsf_api
 networks:
   docker_composer_net:
     ipam:
