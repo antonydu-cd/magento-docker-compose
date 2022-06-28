@@ -1,7 +1,7 @@
-FROM php:7.4-fpm-buster
+FROM php:8.1-fpm-buster
 
 LABEL Maintainer="antony@ebrook.com.tw" \
-      Description="Magento ready image php:7.4-fpm-buster based"
+      Description="Magento ready image php:8.1-fpm-buster based"
 
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -69,7 +69,6 @@ RUN docker-php-ext-install -j$(nproc) \
   sysvsem \
   sysvshm \
   tidy \
-  xmlrpc \
   xsl \
   zip \
   pcntl
